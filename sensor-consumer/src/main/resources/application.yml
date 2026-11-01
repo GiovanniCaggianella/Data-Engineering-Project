@@ -1,0 +1,39 @@
+spring:
+  application.name: sensor-consumer
+  main.web-application-type: none
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:55432/romesensors?connectTimeout=5&socketTimeout=10}
+    username: ${POSTGRES_USER:romesensors}
+    password: ${POSTGRES_PASSWORD:romesensors_local}
+    hikari:
+      connection-timeout: 3000
+      validation-timeout: 1000
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: romesensors-storage
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      max-poll-records: 10
+    listener:
+      ack-mode: record
+      concurrency: 1
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 15000
+        request.timeout.ms: 5000
+        max.block.ms: 5000
+app:
+  topic: environmental-measurements
+  retention-ms: ${KAFKA_RETENTION_MS:604800000}
+  retry-delay-ms: ${RETRY_DELAY_MS:2000}
+  retry-count: ${RETRY_COUNT:3}
+  temperature-threshold: ${TEMPERATURE_THRESHOLD:35}
+  wind-threshold: ${WIND_THRESHOLD:50}
+  precipitation-threshold: ${PRECIPITATION_THRESHOLD:20}

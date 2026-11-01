@@ -1,0 +1,22 @@
+spring:
+  application.name: sensor-producer
+  main.web-application-type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 15000
+        request.timeout.ms: 5000
+        max.block.ms: 5000
+app:
+  topic: environmental-measurements
+  retention-ms: ${KAFKA_RETENTION_MS:604800000}
+  source-url: ${OPEN_METEO_URL:https://archive-api.open-meteo.com/v1/archive}
+  start-date: ${START_DATE:2025-01-01}
+  end-date: ${END_DATE:2025-12-31}
+  data-dir: ${DATA_DIR:data/historical}
+  publish-interval-ms: ${PUBLISH_INTERVAL_MS:5000}

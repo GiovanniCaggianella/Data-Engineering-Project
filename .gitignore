@@ -1,0 +1,8 @@
+**/target/
+.env
+.docker-config/
+data/historical/*
+!data/historical/.gitkeep
+.idea/
+*.iml
+*.log

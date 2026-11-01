@@ -1,0 +1,106 @@
+name: romesensors-streaming
+services:
+  kafka:
+    image: apache/kafka:4.1.2
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_MS: ${KAFKA_RETENTION_MS:-604800000}
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17.6
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-romesensors}
+      POSTGRES_USER: ${POSTGRES_USER:-romesensors}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-romesensors_local}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  sensor-consumer:
+    build: ./sensor-consumer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-romesensors}?connectTimeout=5&socketTimeout=10
+      POSTGRES_USER: ${POSTGRES_USER:-romesensors}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-romesensors_local}
+      KAFKA_RETENTION_MS: ${KAFKA_RETENTION_MS:-604800000}
+      TEMPERATURE_THRESHOLD: ${TEMPERATURE_THRESHOLD:-35}
+      WIND_THRESHOLD: ${WIND_THRESHOLD:-50}
+      PRECIPITATION_THRESHOLD: ${PRECIPITATION_THRESHOLD:-20}
+    depends_on:
+      kafka: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+  sensor-producer:
+    build: ./sensor-producer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATA_DIR: /app/data/historical
+      PUBLISH_INTERVAL_MS: ${PUBLISH_INTERVAL_MS:-5000}
+      START_DATE: ${START_DATE:-2025-01-01}
+      END_DATE: ${END_DATE:-2025-12-31}
+      KAFKA_RETENTION_MS: ${KAFKA_RETENTION_MS:-604800000}
+    volumes:
+      - ./data/historical:/app/data/historical:ro
+    depends_on:
+      kafka: {condition: service_healthy}
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-romesensors}
+      POSTGRES_USER: ${POSTGRES_USER:-romesensors}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-romesensors_local}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/rome-weather.json
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+volumes:
+  kafka-data:
+  postgres-data:
+  grafana-data:

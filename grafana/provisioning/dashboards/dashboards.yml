@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: RomeSensors
+    orgId: 1
+    folder: RomeSensors
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards
